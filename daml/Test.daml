@@ -20,9 +20,9 @@ initParties = do
 
   return $ Parties with ..
 
-createBikeShop : Party -> [Party] -> Script (ContractId BikeShopService)
-createBikeShop party observers = do
-  submit party do createCmd BikeShopService with shop = party, observers
+createBikeShopService : Party -> [Party] -> Script (ContractId BikeShopService)
+createBikeShopService party observers = do
+    submit party do createCmd BikeShopService with shop = party, observers
 
 
 testAcceptProposal : Parties -> Script ()
@@ -46,11 +46,35 @@ testAcceptProposal Parties{..} = script do
 
   return ()
 
+testFinishRepairJob : Parties -> Script ()
+testFinishRepairJob Parties{..} = script do
+
+  -- bikeShop creates repair job proposal 
+  repairJobProposalCid <- 
+    submit bikeShop do 
+      createCmd RepairJobProposal with
+        shop      = bikeShop
+        customer  = alice
+        id        = "mko3462aes"
+        price     = 50.0
+        currency  = "EUR"
+  
+  -- customer accepts repair job proposal
+  repairJobCid <- submit alice do 
+    exerciseCmd repairJobProposalCid AcceptJobProposal with 
+        details   = "Change tires;"
+        observers = [public]
+
+  -- bike shop finishes the repair job
+  submit bikeShop do 
+    exerciseCmd repairJobCid FinishJob
+  return ()
+
 
 testFetchRepairJob : Parties -> Script ()
 testFetchRepairJob Parties{..} = script do
 
-  bikeShopServiceCid <- createBikeShop bikeShop [public]
+  bikeShopServiceCid <- createBikeShopService bikeShop [public]
 
   let repairJobId = "aiosfn12fdgs"
   -- bikeShop creates repair job proposal 
@@ -155,7 +179,7 @@ testCreateProposalEmptyId Parties{..} = script do
 testFetchRepairJobNotExist : Parties -> Script ()
 testFetchRepairJobNotExist Parties{..} = script do
 
-  bikeShopServiceCid <- createBikeShop bikeShop [public]
+  bikeShopServiceCid <- createBikeShopService bikeShop [public]
 
   let repairJobId = "3254mkla09"
   -- bikeShop creates repair job proposal 
@@ -180,6 +204,7 @@ test = script do
       debug "Testing..."
       testAcceptProposal parties
       testRejectProposal parties
+      testFinishRepairJob parties
       testFetchRepairJob parties
       testWrongCustomerAcceptProposal parties
       testCreateProposalEmptyId parties

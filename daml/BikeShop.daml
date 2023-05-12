@@ -22,6 +22,10 @@ template RepairJob
     key (shop, id) : (Party, Text)
     maintainer key._1
 
+    choice FinishJob : ()
+      controller shop
+      do
+        return ()
 
 template RepairJobProposal
   with 

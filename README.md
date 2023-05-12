@@ -8,8 +8,10 @@ A signatory party can also create a BikeShopService template. the shop can exerc
 
 ## II. Workflow
 
-1.
-2.
+1. Shop party creates a RepairJobProposal contract for a given customer party.
+2. Customer accepts the RepairJobProposal by exercising the AcceptJobProposal, with the details and observers that the customer can specify being passed as arguments. The AcceptJobProposal archives the RepairJobProposal contract and creates a RepairJob contract. 
+  Customer can also reject the job proposal by exercising RejectJobProposal on the RepairJobProposal contract, which archives the proposal contract.
+3. Shop party exercises FinishJob on a RepairJob contract to archive the RepairJob.
 
 ## III. Challenges
 
