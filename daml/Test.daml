@@ -1,1 +1,189 @@
 module Test where
+
+import Daml.Script
+
+import BikeShop
+
+data Parties = Parties with
+  alice     : Party
+  bob       : Party
+  bikeShop  : Party
+  public    : Party
+
+
+initParties : Script Parties
+initParties = do
+  alice    <- allocateParty "Alice"
+  bob      <- allocateParty "Bob"
+  bikeShop <- allocateParty "BikeShop"
+  public   <- allocateParty "Public"
+
+  return $ Parties with ..
+
+createBikeShop : Party -> [Party] -> Script (ContractId BikeShopService)
+createBikeShop party observers = do
+  submit party do createCmd BikeShopService with shop = party, observers
+
+
+testAcceptProposal : Parties -> Script ()
+testAcceptProposal Parties{..} = script do
+
+  -- bikeShop creates repair job proposal 
+  repairJobProposalCid <- 
+    submit bikeShop do 
+      createCmd RepairJobProposal with
+        shop      = bikeShop
+        customer  = alice
+        id        = "lj34k56nas"
+        price     = 50.0
+        currency  = "EUR"
+  
+  -- customer accepts repair job proposal
+  repairJobCid <- submit alice do 
+    exerciseCmd repairJobProposalCid AcceptJobProposal with 
+        details   = "Change tires;"
+        observers = [public]
+
+  return ()
+
+
+testFetchRepairJob : Parties -> Script ()
+testFetchRepairJob Parties{..} = script do
+
+  bikeShopServiceCid <- createBikeShop bikeShop [public]
+
+  let repairJobId = "aiosfn12fdgs"
+  -- bikeShop creates repair job proposal 
+  repairJobProposalCid <- 
+    submit bikeShop do 
+      createCmd RepairJobProposal with
+        shop      = bikeShop
+        customer  = alice
+        id        = repairJobId
+        price     = 50.0
+        currency  = "EUR"
+  
+  -- customer accepts repair job proposal
+  repairJobCid <- submit alice do 
+    exerciseCmd repairJobProposalCid AcceptJobProposal with 
+        details   = "Change tires;"
+        observers = [public]
+
+  repairJob <- submit bikeShop do exerciseCmd bikeShopServiceCid FetchRepairJob with repairJobId
+  debug $ show repairJob
+
+  return ()
+
+
+testRejectProposal : Parties -> Script ()
+testRejectProposal Parties{..} = script do
+
+  repairJobProposalCid <- 
+    submit bikeShop do 
+      createCmd RepairJobProposal with
+        shop      = bikeShop
+        customer  = alice
+        id        = "oihu345"
+        price     = 100.0
+        currency  = "EUR"
+
+  submit alice do
+    exerciseCmd repairJobProposalCid RejectJobProposal
+  
+  repairJobs <- query @RepairJobProposal alice
+  debug $ show repairJobs
+  assertMsg "Repair Job Proposal was not rejected" $ null repairJobs
+
+testWrongCustomerAcceptProposal : Parties -> Script ()
+testWrongCustomerAcceptProposal Parties{..} = script do
+
+  repairJobProposalCid <- 
+    submit bikeShop do 
+      createCmd RepairJobProposal with
+        shop      = bikeShop
+        customer  = alice
+        id        = "adsgjio213"
+        price     = 100.0
+        currency  = "EUR"
+
+  submitMustFail bob do
+    exerciseCmd repairJobProposalCid AcceptJobProposal with 
+        details   = "Change cassette; tune up brakes;"
+        observers = [public]
+
+  return ()
+
+testCreateProposalInvalidCurrency : Parties -> Script ()
+testCreateProposalInvalidCurrency Parties{..} = script do
+ 
+  submitMustFail bikeShop do 
+    createCmd RepairJobProposal with
+      shop      = bikeShop
+      customer  = alice
+      id        = "lj2345asfd"
+      price     = 20.0
+      currency  = "JPY"
+
+  return ()
+
+testCreateProposalInvalidPrice : Parties -> Script ()
+testCreateProposalInvalidPrice Parties{..} = script do
+ 
+  submitMustFail bikeShop do 
+    createCmd RepairJobProposal with
+      shop      = bikeShop
+      customer  = alice
+      id        = "n32456asd"
+      price     = -1.0
+      currency  = "USD"
+
+  return ()
+
+testCreateProposalEmptyId : Parties -> Script ()
+testCreateProposalEmptyId Parties{..} = script do
+ 
+  submitMustFail bikeShop do 
+    createCmd RepairJobProposal with
+      shop      = bikeShop
+      customer  = alice
+      id        = ""
+      price     = 20.0
+      currency  = "EUR"
+
+  return ()
+
+testFetchRepairJobNotExist : Parties -> Script ()
+testFetchRepairJobNotExist Parties{..} = script do
+
+  bikeShopServiceCid <- createBikeShop bikeShop [public]
+
+  let repairJobId = "3254mkla09"
+  -- bikeShop creates repair job proposal 
+  repairJobProposalCid <- 
+    submit bikeShop do 
+      createCmd RepairJobProposal with
+        shop      = bikeShop
+        customer  = alice
+        id        = repairJobId
+        price     = 50.0
+        currency  = "EUR"
+
+  repairJob <- submitMustFail bikeShop do exerciseCmd bikeShopServiceCid FetchRepairJob with repairJobId
+
+  return ()
+
+
+test : Script ()
+test = script do
+  initParties >>=
+    (\ parties -> do
+      debug "Testing..."
+      testAcceptProposal parties
+      testRejectProposal parties
+      testFetchRepairJob parties
+      testWrongCustomerAcceptProposal parties
+      testCreateProposalEmptyId parties
+      testCreateProposalInvalidCurrency parties
+      testCreateProposalInvalidPrice parties
+      testFetchRepairJobNotExist parties
+    )

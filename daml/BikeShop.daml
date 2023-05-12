@@ -1,0 +1,88 @@
+module BikeShop where
+
+import DA.Exception
+
+template RepairJob
+  with
+    shop      : Party
+    customer  : Party
+    id        : Text
+    price     : Decimal
+    currency  : Text
+    details   : Text
+    observers : [Party] 
+  where
+    signatory shop, customer
+    observer observers
+
+    ensure id /= "" && 
+          price >= 0.0 &&
+          isAcceptedCurrency currency 
+    
+    key (shop, id) : (Party, Text)
+    maintainer key._1
+
+
+template RepairJobProposal
+  with 
+    shop      : Party
+    customer  : Party
+    id        : Text
+    price     : Decimal
+    currency  : Text
+  where
+    signatory shop
+    observer customer
+
+    ensure id /= "" && 
+          price >= 0.0 && 
+          isAcceptedCurrency currency 
+
+    choice AcceptJobProposal : ContractId RepairJob
+      with
+        details   : Text
+        observers : [Party]
+      controller customer 
+      do
+        create RepairJob with ..
+    
+    choice RejectJobProposal : ()
+      controller customer
+      do
+        return ()
+
+
+template BikeShopService
+  with 
+    shop      : Party
+    observers : [Party]
+  where
+    signatory shop
+    observer observers
+
+    nonconsuming choice FetchRepairJob: RepairJob
+      with 
+        repairJobId : Text
+      controller shop
+      do
+        repairJobOpt <- lookupByKey @RepairJob (shop, repairJobId)
+        case repairJobOpt of
+          Some repairJobCid -> fetch repairJobCid
+          _ -> throw RepairJobNotExists with party = shop, repairJobId
+        
+
+
+exception RepairJobNotExists 
+  with
+    party     : Party
+    repairJobId  : Text
+  where 
+    message "Repair job with id " <> show repairJobId <> " doest not exist for shop " <> show party
+
+
+isAcceptedCurrency : Text -> Bool
+isAcceptedCurrency currency = 
+  currency == "USD" ||
+  currency == "EUR" ||
+  currency == "GBP"
+
