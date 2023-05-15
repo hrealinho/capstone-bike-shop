@@ -17,6 +17,12 @@ A signatory party can also create a BikeShopService template. the shop can exerc
 
 The init-script value on `daml.yaml` was updated to:
 `init-script: Test:test`
+and the following lines were added to the file:
+
+```
+navigator-options:
+  - --feature-user-management=false
+```
 
 ## IV. Building
 
